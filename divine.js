@@ -724,64 +724,16 @@ function buildReport(question) {
 }
 
 // ============================================================
-// ===== Vercel Serverless Function Handler =====
+// ===== 瀏覽器端呼叫入口 =====
+// GitHub Pages 只能放靜態檔案，無法執行 Node.js／Vercel Serverless
+// Function，所以這裡改成直接把 buildReport 掛到 window 上，
+// 讓 index.html 用 <script src="divine.js"></script> 載入後直接呼叫，
+// 不再透過 fetch('/api/divine') 發送網路請求。
 // ============================================================
-
-// 允許呼叫此 API 的網域（請改成你實際部署後的網址）
-const ALLOWED_ORIGINS = [
-  'https://your-5dice-site.vercel.app',
-  'http://localhost:3000', // 本機測試用，正式上線可移除
-];
-
-// 極簡記憶體限流（同一個 IP 每分鐘最多 N 次）。
-// 注意：Serverless 環境每個 instance 記憶體獨立，僅作基本防護，
-// 若流量大或要精準限流，建議改用 Redis/Upstash 等外部儲存。
-const rateLimitMap = new Map();
-const RATE_LIMIT = 20; // 每分鐘
-const RATE_WINDOW_MS = 60 * 1000;
-
-function isRateLimited(ip) {
-  const now = Date.now();
-  const record = rateLimitMap.get(ip);
-  if (!record || now - record.start > RATE_WINDOW_MS) {
-    rateLimitMap.set(ip, { start: now, count: 1 });
-    return false;
-  }
-  record.count++;
-  return record.count > RATE_LIMIT;
-}
-
-module.exports = function handler(req, res) {
-  // ---- Origin 檢查 ----
-  const origin = req.headers.origin || '';
-  if (ALLOWED_ORIGINS.length && !ALLOWED_ORIGINS.includes(origin)) {
-    // 開發測試階段可以先註解掉這個 return，方便用 Postman / curl 測試
-    // return res.status(403).json({ error: 'Forbidden origin' });
-  }
-
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
-
-  // ---- 簡易限流 ----
-  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').toString();
-  if (isRateLimited(ip)) {
-    res.status(429).json({ error: '請求過於頻繁，請稍後再試。' });
-    return;
-  }
-
-  try {
-    const body = req.body || {};
-    const question = (body.question || '').toString().trim().slice(0, 100);
-    if (!question) {
-      res.status(400).json({ error: '請提供問題或主題。' });
-      return;
-    }
-    const result = buildReport(question);
-    res.status(200).json(result);
-  } catch (err) {
-    console.error('divine.js error:', err);
-    res.status(500).json({ error: '伺服器發生錯誤，請稍後再試。' });
+window.DivineEngine = {
+  buildReport: function (question) {
+    const q = (question || '').toString().trim().slice(0, 100);
+    if (!q) throw new Error('請提供問題或主題。');
+    return buildReport(q);
   }
 };

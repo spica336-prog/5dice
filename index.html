@@ -1312,15 +1312,16 @@ footer {
   <div class="footer-copy">五骰占 · 以骰問天 · 以星知命</div>
 </footer>
 
+<script src="divine.js"></script>
 <script>
 // ============================================================
 // 前端 JS — 只負責 UI 互動與動畫。
-// 真正的占卜邏輯、解籤資料庫已搬到後端 /api/divine
+// 真正的占卜邏輯、解籤資料庫已搬到 divine.js（瀏覽器端直接執行）
 // ============================================================
 
-// 後端 API 網址：部署後請改成你實際的網域，例如 https://your-site.vercel.app/api/divine
-// 若前端與 API 同一個網域下，直接用相對路徑 '/api/divine' 即可
-const DIVINE_API_URL = '/api/divine';
+// GitHub Pages 是純靜態空間，無法執行 /api/divine 這種後端 Function，
+// 所以改成直接載入同網域的 divine.js，由 window.DivineEngine.buildReport() 在瀏覽器端運算。
+// （已移除 fetch('/api/divine')，不再對外發送網路請求）
 
 function rand(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -1653,14 +1654,16 @@ async function startCast() {
   const ritualFill = document.getElementById('ritualFill');
   overlay.classList.add('active');
 
-  // 同時開始向後端請求占卜結果（與冥想動畫並行，不額外拖長等待時間）
-  const apiPromise = fetch(DIVINE_API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question: q })
-  }).then(r => {
-    if (!r.ok) throw new Error('API error: ' + r.status);
-    return r.json();
+  // 同時開始「計算」占卜結果（與冥想動畫並行，不額外拖長等待時間）
+  // 改為直接呼叫 divine.js 載入後的 window.DivineEngine.buildReport，
+  // 不再透過網路 fetch，所以在 GitHub Pages 這種純靜態空間也能正常運作。
+  const apiPromise = new Promise((resolve, reject) => {
+    try {
+      const result = window.DivineEngine.buildReport(q);
+      resolve(result);
+    } catch (err) {
+      reject(err);
+    }
   });
 
   await new Promise(resolve => {
